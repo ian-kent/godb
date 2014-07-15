@@ -4,4 +4,7 @@ all:
 deps:
 	#go get launchpad.net/gommap
 
-.phony: deps all
+test:
+	go test ./...
+
+.phony: deps all test

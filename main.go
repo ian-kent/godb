@@ -39,6 +39,7 @@ func main() {
 	timeIt(insertStuff, "Inserted %d docs in %s")
 	timeIt(indexName, "Indexed name field for %d docs in %s")
 	timeIt(indexAge, "Indexed age field for %d docs in %s")
+	timeIt(indexBoth, "Indexed name and age fields for %d docs in %s")
 	//log.Info("Index now contains %d docs", db.Indexes[0].Count)
 	timeIt(findByQuery, "Found %d docs on name field in %s")
 	timeIt(findByQuery2, "Found %d docs on age field in %s")
@@ -46,27 +47,34 @@ func main() {
 }
 
 func timeIt(f func() int, msg string) {
+	log.Info("=================================================")
 	start := time.Now()
 	i := f()
 	end := time.Now()
 	log.Info(msg, i, end.Sub(start).String())
+	log.Info("")
+}
+
+func indexBoth() int {
+	db.NewIndex("Name", "Age")
+	return db.GetIndex("Name", "Age").Count
 }
 
 func indexName() int {
-	idxs := db.NewIndex("Name")
-	return idxs[0].Count
+	db.NewIndex("Name")
+	return db.GetIndex("Name").Count
 }
 
 func indexAge() int {
-	idxs := db.NewIndex("Age")
-	return idxs[0].Count
+	db.NewIndex("Age")
+	return db.GetIndex("Age").Count
 }
 
 func insertStuff() int {
 	ins := 0
 	batchSize := 1000
-	total := 10000000
-	//total := 10000
+	//total := 10000000
+	total := 1000000
 	rand.Seed(time.Now().Unix())
 	var wg sync.WaitGroup
 	for i := 0; i < total / batchSize; i++ {
@@ -103,7 +111,7 @@ func findByQuery() int {
 	if len(docs) > 0 {
 		var o MyDoc
 		docs[0].Unmarshal(&o)
-		log.Info("Name: %s", o.Name)
+		log.Debug("Name: %s", o.Name)
 	}
 
 	return n
@@ -116,7 +124,7 @@ func findByQuery2() int {
 	if len(docs) > 0 {
 		var o MyDoc
 		docs[0].Unmarshal(&o)
-		log.Info("Name: %s", o.Name)
+		log.Debug("Name: %s", o.Name)
 	}
 
 	return n
@@ -135,7 +143,7 @@ func findByQuery3() int {
 	if len(docs) > 0 {
 		var o MyDoc
 		docs[0].Unmarshal(&o)
-		log.Info("Name: %s", o.Name)
+		log.Debug("Name: %s", o.Name)
 	}
 
 	return n
