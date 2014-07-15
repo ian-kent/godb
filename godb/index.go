@@ -110,7 +110,7 @@ func (idx *Index) GetIndexHash(fields map[string]interface{}) []byte {
 	}
 	b := fh.Sum(nil)
 	//log.Trace("Hash: %s", base64.StdEncoding.EncodeToString(b))
-	return b
+	return b[5:12]
 }
 
 func (idx *Index) Index(doc *Document) {
