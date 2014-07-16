@@ -1,6 +1,6 @@
 package godb
 
-import(
+import (
 	"crypto/rand"
 )
 
@@ -8,6 +8,6 @@ type ObjectID []byte
 
 func NewObjectID() []byte {
 	uuid := make([]byte, 16)
- 	rand.Read(uuid)
- 	return uuid
+	rand.Read(uuid)
+	return uuid
 }

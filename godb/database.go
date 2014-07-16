@@ -1,8 +1,8 @@
 package godb
 
-import(
-	"sync"
+import (
 	"github.com/ian-kent/go-log/log"
+	"sync"
 )
 
 type Database struct {
@@ -15,10 +15,27 @@ type Database struct {
 func NewDatabase() Database {
 	return Database{
 		Documents: make([]*Document, 0),
-		Indexes: make(map[string]*Index, 0),
-		DBLock: new(sync.Mutex),
+		Indexes:   make(map[string]*Index, 0),
+		DBLock:    new(sync.Mutex),
 		WriteLock: new(sync.Mutex),
 	}
+}
+
+func (db *Database) NewIndexes(fields ...[]string) error {
+	db.DBLock.Lock()
+	defer db.DBLock.Unlock()
+
+	idxs, err := NewIndexes(db, fields...)
+
+	if err != nil {
+		return err
+	}
+
+	for _, idx := range idxs {
+		db.Indexes[idx.Name] = idx
+	}
+
+	return nil
 }
 
 func (db *Database) NewIndex(fields ...string) error {
@@ -61,24 +78,24 @@ func (db *Database) Find(query interface{}, start int, limit int) (int, []*Docum
 			//log.Trace("Leaf: %s", l.GetHash())
 			if len(l.Documents) == 0 {
 				//log.Trace("Leaf contains no documents")
-				return 0, make([]*Document, 0)	
+				return 0, make([]*Document, 0)
 			}
 			mc := len(l.Documents)
-			if start > mc - 1 {
+			if start > mc-1 {
 				//log.Trace("Leaf contains documents, but start index too high")
 				return mc, make([]*Document, 0)
 			}
-			if start <= mc - 1 && start + limit < mc - 1 {
+			if start <= mc-1 && start+limit < mc-1 {
 				//log.Trace("Leaf contains enough documents to satisfy range: %d:%d", start, start + limit - 1)
-				return mc, l.Documents[start:start+limit-1]
+				return mc, l.Documents[start : start+limit-1]
 			}
 			//log.Trace("Leaf has subset of documents in range")
 			return mc, l.Documents[start:]
 		} else {
 			//log.Trace("Index not found")
 		}
-	}// else {
-		//log.Trace("No fields in query")
+	} // else {
+	//log.Trace("No fields in query")
 	//}
 
 	log.Trace("Scanning full database")
@@ -92,7 +109,7 @@ func (db *Database) Find(query interface{}, start int, limit int) (int, []*Docum
 			//log.Info("Checking for [%s] in field [%s] with value [%s]", f.Value, f.Name, d.Fields[f.Name].Value)
 			if d.Fields[fn] != f {
 				match = false
-				break;
+				break
 			}
 		}
 		if match {
@@ -115,7 +132,7 @@ func (db *Database) Insert(obj ...interface{}) (int, []*Document) {
 
 	for i, o := range obj {
 		doc := Marshal(o)
-		db.Documents[sindex + i] = doc
+		db.Documents[sindex+i] = doc
 		for _, idx := range db.Indexes {
 			idx.Index(doc)
 		}

@@ -1,8 +1,8 @@
 package godb
 
-import(
-	"testing"
+import (
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func TestNewDatabase(t *testing.T) {

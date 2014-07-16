@@ -1,12 +1,12 @@
 package godb
 
-import(
+import (
 	"reflect"
 )
 
 type Document struct {
 	ObjectID ObjectID
-	Fields map[string]interface{}
+	Fields   map[string]interface{}
 }
 
 var FieldCache = make(map[string][]reflect.StructField)
@@ -43,7 +43,7 @@ func GetFieldNames(value interface{}) []reflect.StructField {
 func Marshal(value interface{}) *Document {
 	doc := &Document{
 		ObjectID: NewObjectID(),
-		Fields: GetFields(value),
+		Fields:   GetFields(value),
 	}
 
 	return doc

@@ -1,20 +1,20 @@
 package main
 
-import(
-	"github.com/ian-kent/godb/godb"
-	"github.com/ian-kent/go-log/log"
-	"strconv"
-	"time"
-	"sync"
-	"runtime/pprof"
+import (
 	"flag"
-	"os"
+	"github.com/ian-kent/go-log/log"
+	"github.com/ian-kent/godb/godb"
 	"math/rand"
+	"os"
+	"runtime/pprof"
+	"strconv"
+	"sync"
+	"time"
 )
 
 type MyDoc struct {
 	Name string
-	Age int
+	Age  int
 }
 
 var db godb.Database
@@ -43,6 +43,7 @@ func main() {
 	timeIt(indexName, "Indexed name field for %d docs in %s")
 	timeIt(indexAge, "Indexed age field for %d docs in %s")
 	timeIt(indexBoth, "Indexed name and age fields for %d docs in %s")
+	//timeIt(indexMulti, "Indexed name, age and name+age fields for %d docs in %s")
 	//timeIt(insertStuff, "Inserted %d docs in %s")
 	//log.Info("Index now contains %d docs", db.Indexes[0].Count)
 	timeIt(findByQuery, "Found %d docs on name field in %s")
@@ -57,6 +58,11 @@ func timeIt(f func() int, msg string) {
 	end := time.Now()
 	log.Info(msg, i, end.Sub(start).String())
 	log.Info("")
+}
+
+func indexMulti() int {
+	db.NewIndexes([]string{"Name"}, []string{"Age"}, []string{"Name", "Age"})
+	return (db.GetIndex("Name").Count + db.GetIndex("Age").Count + db.GetIndex("Name", "Age").Count) / 3
 }
 
 func indexBoth() int {
@@ -81,21 +87,21 @@ func insertStuff() int {
 	total := 1000000
 	rand.Seed(time.Now().Unix())
 	var wg sync.WaitGroup
-	for i := 0; i < total / batchSize; i++ {
+	for i := 0; i < total/batchSize; i++ {
 		wg.Add(1)
 		go func(i int) {
 			//log.Info("Starting insert %d", i)
 			defer wg.Done()
-			batch := make([]interface{}, batchSize)			
+			batch := make([]interface{}, batchSize)
 			for j := 0; j < batchSize; j++ {
 				age := rand.Intn(60-20) + 20
-				bn := i * batchSize + j
-				if bn % 1000 == 0 {
+				bn := i*batchSize + j
+				if bn%1000 == 0 {
 					age = 50
 				}
 				batch[j] = &MyDoc{
-					Name:"Test document " + strconv.Itoa(bn),
-					Age: age,
+					Name: "Test document " + strconv.Itoa(bn),
+					Age:  age,
 				}
 			}
 			//log.Info("Created 1000 objects for insert %d", i)
@@ -110,7 +116,7 @@ func insertStuff() int {
 
 func findByQuery() int {
 	// Find a doc using a query
-	n, docs := db.Find(&struct{Name string}{Name:"Test document 123"}, 0, 10)
+	n, docs := db.Find(&struct{ Name string }{Name: "Test document 123"}, 0, 10)
 
 	if len(docs) > 0 {
 		var o MyDoc
@@ -123,7 +129,7 @@ func findByQuery() int {
 
 func findByQuery2() int {
 	// Find a doc using a query
-	n, docs := db.Find(&struct{Age int}{Age: 45}, 0, 10)
+	n, docs := db.Find(&struct{ Age int }{Age: 45}, 0, 10)
 
 	if len(docs) > 0 {
 		var o MyDoc
@@ -136,12 +142,12 @@ func findByQuery2() int {
 
 func findByQuery3() int {
 	// Find a doc using a query
-	n, docs := db.Find(&struct{
+	n, docs := db.Find(&struct {
 		Name string
-		Age int
+		Age  int
 	}{
-		Name:"Test document 3000",
-		Age: 50,
+		Name: "Test document 3000",
+		Age:  50,
 	}, 0, 10)
 
 	if len(docs) > 0 {

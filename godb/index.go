@@ -1,41 +1,85 @@
 package godb
 
-import(
-	"sync"
-	"errors"
-	"strings"
-	"crypto/sha1"
-	"encoding/binary"
-	"github.com/ian-kent/go-log/log"
-	"encoding/base64"
+import (
 	"bytes"
+	"crypto/sha1"
+	"encoding/base64"
+	"encoding/binary"
+	"errors"
+	"github.com/ian-kent/go-log/log"
+	"strings"
+	"sync"
 )
 
 var ErrNoFields = errors.New("No fields to index")
 var ErrIndexAlreadyExists = errors.New("Index already exists")
 
 type Index struct {
-	Name string
-	Fields []string
-	Tree *Leaf
-	Count int
+	Name      string
+	Fields    []string
+	Tree      *Leaf
+	Count     int
 	Documents []*Document
-	Database *Database
+	Database  *Database
 }
 
 type Leaf struct {
-	Index *Index
+	Index     *Index
 	LeafValue []byte
-	Lock *sync.Mutex
-	Children map[byte]*Leaf
+	Lock      *sync.Mutex
+	Children  map[byte]*Leaf
 	Documents []*Document
-	Unsplit []byte
+	Unsplit   []byte
 }
 
 func makeIndexName(fields ...string) string {
 	ixn := strings.Join(fields, "-")
 	log.Trace("Index name: %s", ixn)
 	return ixn
+}
+
+func NewIndexes(db *Database, fields ...[]string) ([]*Index, error) {
+	if len(fields) == 0 {
+		return nil, ErrNoFields
+	}
+
+	for _, fl := range fields {
+		if len(fl) == 0 {
+			return nil, ErrNoFields
+		}
+	}
+
+	for _, fl := range fields {
+		indexName := makeIndexName(fl...)
+		if _, ok := db.Indexes[indexName]; ok {
+			return nil, ErrIndexAlreadyExists
+		}
+	}
+
+	idxs := make([]*Index, len(fields))
+
+	for i, fl := range fields {
+		indexName := makeIndexName(fl...)
+		idx := &Index{
+			Fields:    fl,
+			Count:     0,
+			Documents: make([]*Document, 0),
+			Database:  db,
+			Name:      indexName,
+		}
+		idx.Tree = idx.NewLeaf([]byte{})
+		idxs[i] = idx
+	}
+
+	db.WriteLock.Lock()
+	for _, doc := range db.Documents {
+		for _, idx := range idxs {
+			idx.Index(doc)
+		}
+	}
+	db.WriteLock.Unlock()
+
+	return idxs, nil
 }
 
 func NewIndex(db *Database, fields ...string) (*Index, error) {
@@ -49,12 +93,12 @@ func NewIndex(db *Database, fields ...string) (*Index, error) {
 		return nil, ErrIndexAlreadyExists
 	}
 
-	idx := &Index {
-		Fields: fields,
-		Count: 0,
+	idx := &Index{
+		Fields:    fields,
+		Count:     0,
 		Documents: make([]*Document, 0),
-		Database: db,
-		Name: indexName,
+		Database:  db,
+		Name:      indexName,
 	}
 	idx.Tree = idx.NewLeaf([]byte{})
 
@@ -108,7 +152,7 @@ func (leaf *Leaf) AddDocument(doc *Document, value []byte) *Leaf {
 		leaf.Unsplit = nil
 		leaf.Documents = make([]*Document, 0)
 		leaf.Children[value[len(leaf.LeafValue)]] = leaf.Index.NewLeaf(value[:len(leaf.LeafValue)+1])
-		l := leaf.Children[value[len(leaf.LeafValue)]]		
+		l := leaf.Children[value[len(leaf.LeafValue)]]
 		l.AddDocument(doc, value)
 		return l
 	}
@@ -164,7 +208,7 @@ func (idx *Index) Index(doc *Document) {
 	idx.Count += 1
 }
 
-func (leaf *Leaf) GetLeaf(value []byte, offset int) *Leaf {	
+func (leaf *Leaf) GetLeaf(value []byte, offset int) *Leaf {
 	if len(value) <= offset || len(leaf.Children) == 0 {
 		return leaf
 	}
@@ -172,27 +216,27 @@ func (leaf *Leaf) GetLeaf(value []byte, offset int) *Leaf {
 	leaf.Lock.Lock()
 	if l, ok := leaf.Children[value[offset]]; ok {
 		leaf.Lock.Unlock()
-		if len(value) == offset + 1 {
+		if len(value) == offset+1 {
 			return leaf.Children[value[offset]]
 		}
-		return l.GetLeaf(value, offset + 1)
+		return l.GetLeaf(value, offset+1)
 	}
 
 	leaf.Children[value[offset]] = leaf.Index.NewLeaf(value[:offset+1])
 	leaf.Lock.Unlock()
 
-	if len(value) == offset + 1 {
+	if len(value) == offset+1 {
 		return leaf.Children[value[offset]]
 	}
-	return leaf.Children[value[offset]].GetLeaf(value, offset + 1)
+	return leaf.Children[value[offset]].GetLeaf(value, offset+1)
 }
 
 func (idx *Index) NewLeaf(value []byte) *Leaf {
 	return &Leaf{
-		Children: make(map[byte]*Leaf),
+		Children:  make(map[byte]*Leaf),
 		Documents: make([]*Document, 0),
-		Lock: new(sync.Mutex),
-		Index: idx,
+		Lock:      new(sync.Mutex),
+		Index:     idx,
 		LeafValue: value,
 	}
 }
