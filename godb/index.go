@@ -8,6 +8,7 @@ import(
 	"encoding/binary"
 	"github.com/ian-kent/go-log/log"
 	"encoding/base64"
+	"bytes"
 )
 
 var ErrNoFields = errors.New("No fields to index")
@@ -16,7 +17,7 @@ var ErrIndexAlreadyExists = errors.New("Index already exists")
 type Index struct {
 	Name string
 	Fields []string
-	Tree map[byte]*Leaf
+	Tree *Leaf
 	Count int
 	Documents []*Document
 	Database *Database
@@ -28,6 +29,7 @@ type Leaf struct {
 	Lock *sync.Mutex
 	Children map[byte]*Leaf
 	Documents []*Document
+	Unsplit []byte
 }
 
 func makeIndexName(fields ...string) string {
@@ -49,12 +51,12 @@ func NewIndex(db *Database, fields ...string) (*Index, error) {
 
 	idx := &Index {
 		Fields: fields,
-		Tree: make(map[byte]*Leaf),
 		Count: 0,
 		Documents: make([]*Document, 0),
 		Database: db,
 		Name: indexName,
 	}
+	idx.Tree = idx.NewLeaf([]byte{})
 
 	db.WriteLock.Lock()
 	for _, doc := range db.Documents {
@@ -67,30 +69,65 @@ func NewIndex(db *Database, fields ...string) (*Index, error) {
 
 func (idx *Index) FindLeaf(fields map[string]interface{}) *Leaf {
 	key := idx.GetIndexHash(fields)
-	return idx.GetLeaf(key)
+	return idx.Tree.GetLeaf(key, 0)
+}
+
+func bytesToHash(value []byte) string {
+	return base64.StdEncoding.EncodeToString(value)
 }
 
 func (leaf *Leaf) GetHash() string {
-	return base64.StdEncoding.EncodeToString(leaf.LeafValue)
+	return bytesToHash(leaf.LeafValue)
 }
 
-func (idx *Index) GetLeaf(value []byte) *Leaf {
-	if len(value) == 0 {
-		return nil
-	}
-	if leaf, ok := idx.Tree[value[0]]; ok {
-		return leaf.GetLeaf(value[1:])
-	}
-	idx.Tree[value[0]] = idx.NewLeaf([]byte{value[0]})
-	return idx.Tree[value[0]].GetLeaf(value[1:])
-}
-
-func (leaf *Leaf) AddDocument(doc *Document) {
+func (leaf *Leaf) AddDocument(doc *Document, value []byte) *Leaf {
 	leaf.Lock.Lock()
-	leaf.Documents = append(leaf.Documents, doc)
-	log.Trace("Adding doc to leaf: %s", leaf.GetHash())
-	log.Trace("Doc count: %d", len(leaf.Documents))
-	leaf.Lock.Unlock()
+	defer leaf.Lock.Unlock()
+
+	// FIXME shouldn't end up here, needs refactoring
+	//if len(leaf.Children) > 0 {
+	//	log.Error("ERROR - leaf has children")
+	//	return leaf
+	//}
+
+	if leaf.Unsplit != nil && bytes.Equal(leaf.Unsplit, value) {
+		// reuse this leaf
+		//log.Trace("Adding doc to leaf: %s", func() string { return leaf.GetHash() })
+		leaf.Documents = append(leaf.Documents, doc)
+		//log.Trace("Doc count: %d", len(leaf.Documents))
+		return leaf
+	}
+
+	if leaf.Unsplit != nil {
+		// split this leaf
+		//log.Trace("Need to split leaf %s (unsplit for %s) for value %s", func() (string, string, string) { return leaf.GetHash(), bytesToHash(leaf.Unsplit), bytesToHash(value) })
+		unsplit := leaf.Unsplit
+		leaf.Children[unsplit[len(leaf.LeafValue)]] = leaf.Index.NewLeaf(unsplit[:len(leaf.LeafValue)+1])
+		leaf.Children[unsplit[len(leaf.LeafValue)]].Documents = leaf.Documents
+		leaf.Children[unsplit[len(leaf.LeafValue)]].Unsplit = unsplit
+		leaf.Unsplit = nil
+		leaf.Documents = make([]*Document, 0)
+		leaf.Children[value[len(leaf.LeafValue)]] = leaf.Index.NewLeaf(value[:len(leaf.LeafValue)+1])
+		l := leaf.Children[value[len(leaf.LeafValue)]]		
+		l.AddDocument(doc, value)
+		return l
+	}
+
+	if leaf.Unsplit == nil && len(leaf.Documents) == 0 {
+		// take this leaf
+		//log.Trace("Adding doc to leaf: %s", func() string { return leaf.GetHash() })
+		leaf.Unsplit = value
+		leaf.Documents = append(leaf.Documents, doc)
+		//log.Trace("Doc count: %d", len(leaf.Documents))
+		return leaf
+	}
+
+	log.Error("ERROR - Doc %s doesn't in expected leaf %s", bytesToHash(value), leaf.GetHash())
+	log.Error("  Unsplit: %s", bytesToHash(leaf.Unsplit))
+	log.Error("  Docs: %d", len(leaf.Documents))
+	log.Error("  Children: %d", len(leaf.Children))
+
+	return leaf
 }
 
 func (idx *Index) GetIndexHash(fields map[string]interface{}) []byte {
@@ -110,7 +147,7 @@ func (idx *Index) GetIndexHash(fields map[string]interface{}) []byte {
 	}
 	b := fh.Sum(nil)
 	//log.Trace("Hash: %s", base64.StdEncoding.EncodeToString(b))
-	return b[5:12]
+	return b
 }
 
 func (idx *Index) Index(doc *Document) {
@@ -120,27 +157,34 @@ func (idx *Index) Index(doc *Document) {
 			fm[f] = v
 		}
 	}
-	log.Trace("fm: %s", fm)
-	leaf := idx.GetLeaf(idx.GetIndexHash(fm))
-	leaf.AddDocument(doc)
+	//log.Trace("fm: %s", fm)
+	hash := idx.GetIndexHash(fm)
+	leaf := idx.Tree.GetLeaf(hash, 0)
+	leaf = leaf.AddDocument(doc, hash)
 	idx.Count += 1
 }
 
-func (leaf *Leaf) GetLeaf(value []byte) *Leaf {
-	if len(value) == 0 {
+func (leaf *Leaf) GetLeaf(value []byte, offset int) *Leaf {	
+	if len(value) <= offset || len(leaf.Children) == 0 {
 		return leaf
 	}
-	if l, ok := leaf.Children[value[0]]; ok {
-		if len(value) == 1 {
-			return leaf.Children[value[0]]
+
+	leaf.Lock.Lock()
+	if l, ok := leaf.Children[value[offset]]; ok {
+		leaf.Lock.Unlock()
+		if len(value) == offset + 1 {
+			return leaf.Children[value[offset]]
 		}
-		return l.GetLeaf(value[1:])
+		return l.GetLeaf(value, offset + 1)
 	}
-	leaf.Children[value[0]] = leaf.Index.NewLeaf(append(leaf.LeafValue, value[0]))
-	if len(value) == 1 {
-		return leaf.Children[value[0]]
+
+	leaf.Children[value[offset]] = leaf.Index.NewLeaf(value[:offset+1])
+	leaf.Lock.Unlock()
+
+	if len(value) == offset + 1 {
+		return leaf.Children[value[offset]]
 	}
-	return leaf.Children[value[0]].GetLeaf(value[1:])
+	return leaf.Children[value[offset]].GetLeaf(value, offset + 1)
 }
 
 func (idx *Index) NewLeaf(value []byte) *Leaf {

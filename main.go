@@ -21,7 +21,10 @@ var db godb.Database
 
 func main() {
 	profile := flag.String("profile", "", "profile application")
+	loglevel := flag.String("loglevel", "DEBUG", "log level (ERROR, INFO, WARN, DEBUG, TRACE)")
 	flag.Parse()
+
+	log.Logger().SetLevel(log.Stol(*loglevel))
 
 	if *profile != "" {
 		f, err := os.Create(*profile)
@@ -40,6 +43,7 @@ func main() {
 	timeIt(indexName, "Indexed name field for %d docs in %s")
 	timeIt(indexAge, "Indexed age field for %d docs in %s")
 	timeIt(indexBoth, "Indexed name and age fields for %d docs in %s")
+	//timeIt(insertStuff, "Inserted %d docs in %s")
 	//log.Info("Index now contains %d docs", db.Indexes[0].Count)
 	timeIt(findByQuery, "Found %d docs on name field in %s")
 	timeIt(findByQuery2, "Found %d docs on age field in %s")

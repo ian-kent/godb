@@ -50,36 +50,36 @@ func (db *Database) Find(query interface{}, start int, limit int) (int, []*Docum
 		f = append(f, fn)
 	}
 	if len(f) > 0 {
-		log.Trace("Query has %d fields", len(f))
+		//log.Trace("Query has %d fields", len(f))
 		if idx := db.GetIndex(f...); idx != nil {
-			log.Trace("Using index %s", idx.Name);
+			//log.Trace("Using index %s", idx.Name);
 			l := idx.FindLeaf(fields)
 			if l == nil {
-				log.Trace("Leaf not found")
+				//log.Trace("Leaf not found")
 				return 0, make([]*Document, 0)
 			}
-			log.Trace("Leaf: %s", l.GetHash())
+			//log.Trace("Leaf: %s", l.GetHash())
 			if len(l.Documents) == 0 {
-				log.Trace("Leaf contains no documents")
+				//log.Trace("Leaf contains no documents")
 				return 0, make([]*Document, 0)	
 			}
 			mc := len(l.Documents)
 			if start > mc - 1 {
-				log.Trace("Leaf contains documents, but start index too high")
+				//log.Trace("Leaf contains documents, but start index too high")
 				return mc, make([]*Document, 0)
 			}
 			if start <= mc - 1 && start + limit < mc - 1 {
-				log.Trace("Leaf contains enough documents to satisfy range: %d:%d", start, start + limit - 1)
+				//log.Trace("Leaf contains enough documents to satisfy range: %d:%d", start, start + limit - 1)
 				return mc, l.Documents[start:start+limit-1]
 			}
-			log.Trace("Leaf has subset of documents in range")
+			//log.Trace("Leaf has subset of documents in range")
 			return mc, l.Documents[start:]
 		} else {
-			log.Trace("Index not found")
+			//log.Trace("Index not found")
 		}
-	} else {
-		log.Trace("No fields in query")
-	}
+	}// else {
+		//log.Trace("No fields in query")
+	//}
 
 	log.Trace("Scanning full database")
 
