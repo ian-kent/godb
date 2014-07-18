@@ -38,14 +38,10 @@ func main() {
 
 	db = godb.NewDatabase()
 
-	//timeIt(indexStuff, "Indexed %d docs in %s")
 	timeIt(insertStuff, "Inserted %d docs in %s")
 	timeIt(indexName, "Indexed name field for %d docs in %s")
 	timeIt(indexAge, "Indexed age field for %d docs in %s")
 	timeIt(indexBoth, "Indexed name and age fields for %d docs in %s")
-	//timeIt(indexMulti, "Indexed name, age and name+age fields for %d docs in %s")
-	//timeIt(insertStuff, "Inserted %d docs in %s")
-	//log.Info("Index now contains %d docs", db.Indexes[0].Count)
 	timeIt(findByQuery, "Found %d docs on name field in %s")
 	timeIt(findByQuery2, "Found %d docs on age field in %s")
 	timeIt(findByQuery3, "Found %d docs on both fields in %s")

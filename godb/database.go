@@ -58,6 +58,14 @@ func (db *Database) GetIndex(fields ...string) *Index {
 	return idx
 }
 
+func (db *Database) FindOne(query interface{}, start int) *Document {
+	n, docs := db.Find(query, start, 1)
+	if n == 0 {
+		return nil
+	}
+	return docs[0]
+}
+
 func (db *Database) Find(query interface{}, start int, limit int) (int, []*Document) {
 	fields := GetFields(query)
 	log.Trace("Query: %s", fields)
